@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { getGameDetails, getScreenshots } from '../api/rawg';
+import { sanitizeHtml } from '../utils/sanitize';
 
 const GameDetail = ({ gameId, onClose }) => {
   const [details, setDetails] = useState(null);
@@ -72,6 +73,28 @@ const GameDetail = ({ gameId, onClose }) => {
               {screenshots.length > 0 && (
                 <>
                   <div className="main-image-container">
+                    {screenshots.length > 1 && (
+                      <>
+                        <button
+                          className="nav-button prev"
+                          onClick={() => setActiveImage((current) => 
+                            current === 0 ? screenshots.length - 1 : current - 1
+                          )}
+                          aria-label="Previous screenshot"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          className="nav-button next"
+                          onClick={() => setActiveImage((current) => 
+                            current === screenshots.length - 1 ? 0 : current + 1
+                          )}
+                          aria-label="Next screenshot"
+                        >
+                          ›
+                        </button>
+                      </>
+                    )}
                     <img
                       src={screenshots[activeImage]}
                       alt={`Screenshot ${activeImage + 1} of ${details.name}`}
@@ -133,7 +156,9 @@ const GameDetail = ({ gameId, onClose }) => {
                 <div className="description">
                   <h3>About</h3>
                   <div 
-                    dangerouslySetInnerHTML={{ __html: details.description }}
+                    dangerouslySetInnerHTML={{ 
+                      __html: sanitizeHtml(details.description)
+                    }}
                     className="description-content"
                   />
                 </div>
@@ -231,6 +256,37 @@ const GameDetail = ({ gameId, onClose }) => {
             width: 100%;
             height: 100%;
             object-fit: cover;
+          }
+
+          .nav-button {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            z-index: 2;
+          }
+
+          .nav-button:hover {
+            background: rgba(0, 0, 0, 0.8);
+          }
+
+          .nav-button.prev {
+            left: 10px;
+          }
+
+          .nav-button.next {
+            right: 10px;
           }
 
           .thumbnails {
