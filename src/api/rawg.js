@@ -31,9 +31,51 @@ const normalizeGame = (g) => ({
 	background_image: g.background_image || null,
 });
 
-// Simple in-memory caches
-const detailsCache = new Map();
-const screenshotsCache = new Map();
+// Cache configuration
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+const MAX_CACHE_SIZE = 100; // Maximum number of items in each cache
+
+class TimedCache {
+  constructor(maxSize = MAX_CACHE_SIZE) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+
+  set(key, value) {
+    // Remove oldest entry if we're at max size
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+
+    this.cache.set(key, {
+      value,
+      timestamp: Date.now()
+    });
+  }
+
+  get(key) {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    // Check if entry has expired
+    if (Date.now() - entry.timestamp > CACHE_TTL) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.value;
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+// Initialize caches
+const detailsCache = new TimedCache();
+const screenshotsCache = new TimedCache();
+const searchCache = new TimedCache(50); // Keep fewer search results
 
 /**
  * Search games with optional filters.
@@ -58,6 +100,15 @@ export async function searchGames({ query = '', platforms, ordering, page = 1, p
 			else params.platforms = platforms;
 		}
 
+		// Create cache key from params
+		const cacheKey = JSON.stringify({ query, platforms, ordering, page, page_size });
+		
+		// Check cache first
+		const cachedResult = searchCache.get(cacheKey);
+		if (cachedResult) {
+			return cachedResult;
+		}
+
 		const url = buildUrl('/games', params);
 		const res = await fetch(url);
 		if (!res.ok) {
@@ -67,12 +118,17 @@ export async function searchGames({ query = '', platforms, ordering, page = 1, p
 		const data = await res.json();
 
 		const results = Array.isArray(data.results) ? data.results.map(normalizeGame) : [];
-		return {
+		const response = {
 			count: data.count || results.length,
 			next: data.next || null,
 			previous: data.previous || null,
 			results,
 		};
+
+		// Cache the response
+		searchCache.set(cacheKey, response);
+
+		return response;
 	} catch (err) {
 		// rethrow so the caller can handle
 		throw err;
@@ -146,6 +202,7 @@ export async function getScreenshots(gameId) {
 export function clearRawgCache() {
 	detailsCache.clear();
 	screenshotsCache.clear();
+	searchCache.clear();
 }
 
 const rawg = {
